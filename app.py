@@ -22,32 +22,16 @@ login_manager.__init__(app)
 app.secret_key = 'chave_secreta'
 
 #criando as tabelas
-class usuario(db.Model):
+class Usuario(db.Model,UserMixin):
     __tablename__ = 'usuarios'
     id = db.Column(db.Integer, primary_key = True)
     nome = db.Column(db.String(40),nullable = False, unique = True)
     senha = db.Column(db.String(40),nullable = False)
 
-#def obter_conexao():
-    #conn = sqlite3.connect('banco.db')
-    #conn.row_factory = sqlite3.Row
-    #return conn
 
-class User(UserMixin):
-    def __init__(self, nome, senha) -> None:
-        self.nome = nome
-        self.senha = senha
-
-    #@classmethod
-    #def get(cls, user_id):
-        # user_id nesse caso é um nome
-        #conexao = obter_conexao()        
-        #sql = "select * from users where nome = ?"
-        #resultado = conexao.execute(sql, (user_id,)).fetchone()
-        #user = User(nome=resultado['nome'], senha=resultado['senha'])
-        #user.id = resultado['nome']
-        #return user
-
+@login_manager.user_loader
+def load_user(user_id):
+    return Usuario.query.get(int(user_id))
 
 
 @app.route('/')
@@ -59,15 +43,38 @@ def login():
     if request.method == 'POST':
         nome = request.form['name']
         senha= request.form['password']
+
+        user =  Usuario.query.filter_by(nome=nome).first()
+
+        if user and check_password_hash(user.senha,senha):
+            login_user(user)
+            return redirect(url_for('dash'))
+        else:
+           return redirect(url_for('login'))
+        
     return render_template('login.html')
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
         nome = request.form['name']
-        senha= request.form['password']
-        
+        senha = request.form['password']
+
+        # Verifica se usuário já existe
+        if Usuario.query.filter_by(nome=nome).first():
+            flash('Nome de usuário já existe.')
+            return redirect(url_for('register'))
+
+        # Cria e salva no banco
+        senha_hash  = generate_password_hash(senha)
+        novo_usuario = Usuario(nome=nome, senha=senha_hash)
+        db.session.add(novo_usuario)
+        db.session.commit()
+
+        return redirect(url_for('login'))
+
     return render_template('register.html')
+
 
 
 @app.route('/dashboard')
